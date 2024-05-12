@@ -127,7 +127,12 @@ public class Instrumenter {
     final ContentTypeDetector detector = new ContentTypeDetector(input);
     switch (detector.getType()) {
       case ContentTypeDetector.CLASSFILE:
-        output.write(this.instrument(detector.getInputStream()));
+        // Avoid NPE for classes that are skipped for instrumentation
+        byte[] outcome = this.instrument(detector.getInputStream());
+        if (outcome == null) {
+            return -1;
+        }
+        output.write(outcome);
         return 1;
       case ContentTypeDetector.GZFILE:
         return this.instrumentGzip(detector.getInputStream(), output);
@@ -148,7 +153,15 @@ public class Instrumenter {
     try {
       final OutputStream output = new FileOutputStream(dest);
       try {
-        return this.instrumentToFile(input, output);
+        int result = this.instrumentToFile(input, output);
+        if (result == -1) {
+          result = 0;
+          // Copy original class for for the skipped insturmented classes
+          final InputStream newIs = new FileInputStream(source);
+          this.copy(newIs, output);
+          newIs.close();
+        }
+        return result;
       } finally {
         output.close();
       }
@@ -223,3 +236,4 @@ public class Instrumenter {
     }
   }
 }
+
